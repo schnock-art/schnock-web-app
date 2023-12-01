@@ -1,0 +1,10 @@
+build:
+	npm run build
+
+run-develop:
+	npm start
+
+run-test:
+	npm test
+
+	
