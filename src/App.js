@@ -1,10 +1,13 @@
 import React, {useState, useEffect} from 'react';
 import { StorageManager, StorageImage } from '@aws-amplify/ui-react-storage';
-import { ThemeProvider } from '@aws-amplify/ui-react';
+import { ThemeProvider, Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css'
 import './App.css';
 import { list } from 'aws-amplify/storage';
 import ImageModal from './components/ImageModal';
+import { getCurrentUser, signOut } from 'aws-amplify/auth';
+import { Hub } from 'aws-amplify/utils';
+
 
 const globalTheme = {
   name: 'my-theme',
@@ -26,6 +29,61 @@ const globalTheme = {
 const App = () =>{
   const [images, setPhotos] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [showAuthenticator, setShowAuthenticator] = useState(false);
+  const [user, setUser] = useState(null);
+  
+  // Function to check the current user session
+  useEffect(() => {
+    getCurrentUser()
+      .then(user => setUser(user))
+      .catch(() => setUser(null));
+  }, []);
+
+  // Function to listen to auth events using Hub
+  useEffect(() => {
+    const listener = ({ payload }) => {
+      switch (payload.event) {
+        case 'signedIn':
+          console.log('user have been signedIn successfully.');
+          getCurrentUser().then(user => setUser(user));
+          break;
+        case 'signedOut':
+          console.log('user have been signedOut successfully.');
+          setUser(null);
+          break;
+        case 'tokenRefresh':
+          console.log('auth tokens have been refreshed.');
+          break;
+        case 'tokenRefresh_failure':
+          console.log('failure while refreshing auth tokens.');
+          break;
+        case 'signInWithRedirect':
+          console.log('signInWithRedirect API has successfully been resolved.');
+          break;
+        case 'signInWithRedirect_failure':
+          console.log('failure while trying to resolve signInWithRedirect API.');
+          break;
+        case 'customOAuthState':
+          console.log('custom state returned from CognitoHosted UI');
+          break;
+        default:
+          break;
+      }
+    };
+
+  Hub.listen('auth', listener);
+    
+  }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      setUser(null);
+      setShowAuthenticator(false);
+    } catch (error) {
+      console.error('Error signing out: ', error);
+    }
+  };
 
   
   const handleImageSelect = (imgKey) => {
@@ -35,7 +93,7 @@ const App = () =>{
   const handleCloseModal = () => {
       setSelectedImage(null);
   };
-    
+
 
   const processFile = async ({ file }) => {
     // Extract the path and filename
@@ -83,14 +141,10 @@ const App = () =>{
           listAll: true 
         } 
       });
-
-      
-
       console.log('Listed Items:', response.items);
 
       const validPhotos = response.items
       .filter(item => item.key && item.key.trim() !== 'photos/') // Filter out empty or whitespace-only keys
-
 
       // Filter and process the response to get photo URLs
       setPhotos(validPhotos.map(file => file.key)); // Assuming file has a URL attribute
@@ -105,53 +159,79 @@ const App = () =>{
       fetchPhotos();
   }, []);
 
+
   useEffect(() => {
     console.log('Updated Photos:', images);
   }, [images]);
 
   return (
     <ThemeProvider theme={globalTheme}>
-    <StorageManager
-      acceptedFileTypes={[
-        // you can list file extensions:
-        //'.gif',
-        //'.bmp',
-        //'.doc',
-        '.jpeg',
-        '.jpg',
-        // or MIME types:
-        '.png',
-      ]}
-      accessLevel="guest"
-      maxFileCount={5}
-      autoUpload={false}
-      // Size is in bytes
-      maxFileSize={1000000}
-      processFile={processFile}
-      path="photos/"
-      onUploadSuccess={fetchPhotos}
-      CacheControl="max-age=86400"
-    />
-    <div><h1>Photo Gallery</h1></div>
-    <div className="photo-gallery">
-      {images.map(photo => (
-        <StorageImage
-          alt={photo}
-          key={photo}
-          imgKey={photo}
-          accessLevel="public"
-          style={{ width: '100%', height: '100%' }} // This ensures the image takes the full size of its container
-          onStorageGetError={(error) => console.error(error)}
-          onClick={() => handleImageSelect(photo)} // Add click handler
+      
+      <header className="App-header">
+      
+              {user ? (
+                <div>
+                  Welcome, {user.username}!
+                  <button onClick={handleSignOut}>Logout</button>
+                </div>
+              ) : (
+                <div>
+                  Welcome, Guest!
+                  <button onClick={() => setShowAuthenticator(true)}>Login</button>
+                </div>
+              )}
+            </header>
+      {showAuthenticator && (
+      <Authenticator variation='modal'>
+        {({ signOut, user }) => user && (
+          <>
+            {user && (
+              <StorageManager
+              acceptedFileTypes={[
+                // you can list file extensions:
+                //'.gif',
+                //'.bmp',
+                //'.doc',
+                '.jpeg',
+                '.jpg',
+                // or MIME types:
+                '.png',
+              ]}
+              accessLevel="guest"
+              maxFileCount={5}
+              autoUpload={false}
+              // Size is in bytes
+              maxFileSize={1000000}
+              processFile={processFile}
+              path="photos/"
+              onUploadSuccess={fetchPhotos}
+              CacheControl="max-age=86400"
+            />
+            )}
+          </>
+        )}
+      </Authenticator>
+      )}
+      <div><h1>Photo Gallery</h1></div>
+      <div className="photo-gallery">
+        {images.map(photo => (
+          <StorageImage
+            alt={photo}
+            key={photo}
+            imgKey={photo}
+            accessLevel="public"
+            style={{ width: '100%', height: '100%' }} // This ensures the image takes the full size of its container
+            onStorageGetError={(error) => console.error(error)}
+            onClick={() => handleImageSelect(photo)} // Add click handler
         />
-      ))}
-    </div>
-    {selectedImage && (
-      <ImageModal imgKey={selectedImage} onClose={handleCloseModal} />
-    )}
-    </ThemeProvider>
-  )
+        ))}
+      </div>
 
-}
+      {selectedImage && (
+        <ImageModal imgKey={selectedImage} onClose={handleCloseModal} />
+      )}
+    </ThemeProvider>
+  );
+};
 
 export default App;
