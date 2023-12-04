@@ -36,3 +36,22 @@
     transform: rotate(360deg);
   }
 }
+
+.photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 4fr)); /* Adjust minmax for desired size */
+  grid-gap: 15px; /* Adjust for spacing */
+  padding: 15px; /* Gallery padding */
+}
+
+.photo-gallery img {
+  width: 100%;
+  height: auto;
+  object-fit: cover; /* Keeps aspect ratio intact */
+  border-radius: 5px; /* Optional for rounded corners */
+  transition: transform 0.3s ease; /* Smooth hover effect */
+}
+
+.photo-gallery img:hover {
+  transform: scale(1.05); /* Zoom effect on hover */
+}
